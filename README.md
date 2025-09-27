@@ -75,7 +75,8 @@ Use VS Code symbol tools to reduce context consumption:
 - `get_document_symbols_code` for file structure overview instead of reading entire files
 - `search_symbols_code` to find symbols by name across the project
 - `get_symbol_definition_code` for type info and docs without full file context
-- Workflow: get outline → search symbols → get definitions → read implementation only when needed
+- `rename_symbol_code` for safe refactoring and symbol renaming
+- Workflow: get outline → search symbols → get definitions → rename symbols → read implementation only when needed
 ```
 
 
@@ -93,6 +94,7 @@ The VS Code MCP Server extension implements an MCP-compliant server that allows 
 - **Copy files and directories** to new locations
 - **Search for symbols** across your workspace
 - **Get symbol definitions** and hover information by line and symbol name
+- **Rename symbols** and update all references across the workspace
 - **Create new files** using VS Code's WorkspaceEdit API
 - **Make line replacements** in files
 - **Check for diagnostics** (errors and warnings) in your workspace
@@ -202,18 +204,45 @@ The extension creates an MCP server that:
   - Parameters:
     - `path`: The path to the file to analyze (relative to workspace)
     - `maxDepth` (optional): Maximum nesting depth to display
-  
+
   This tool provides:
   - Complete symbol tree for a document (similar to VS Code's Outline view)
   - Hierarchical structure showing classes, functions, methods, variables, etc.
   - Position information and symbol kinds for each symbol
   - Summary statistics by symbol type
-  
+
   It's particularly useful for:
   - Understanding file structure and organization at a glance
   - Getting an overview of all symbols in a document
   - Analyzing code architecture and relationships
   - Finding all symbols of specific types within a file
+
+- **rename_symbol_code**: Renames a symbol (function, class, variable, etc.) and updates all references across the workspace
+  - Parameters:
+    - `path`: The path to the file containing the symbol
+    - `line`: The line number of the symbol (1-based)
+    - `symbol`: The symbol name to look for on the specified line
+    - `newName`: The new name for the symbol
+    - `matchIndex` (optional): Match index (1-based) to specify which symbol to rename when multiple matches are found on the same line
+
+  This tool provides:
+  - Safe symbol renaming using VS Code's built-in rename functionality
+  - Automatic update of all references across the workspace
+  - Detailed feedback on the number of changes applied
+  - List of modified files and change counts
+  - Automatic detection of symbol occurrences on the line
+  - Smart handling of multiple symbol occurrences (lists indices and allows specification)
+
+  It's particularly useful for:
+  - Refactoring code and improving naming conventions
+  - Fixing typos in symbol names
+  - Maintaining consistency across the codebase
+  - Safe symbol renaming without breaking references
+
+  Usage workflow:
+  1. First call without `matchIndex` parameter to find symbol occurrences
+  2. If multiple matches found, tool returns indices and asks for specification
+  3. Call again with `matchIndex` parameter to rename specific symbol
 
 ### Shell Tools
 - **execute_shell_command_code**: Executes a shell command in the VS Code integrated terminal with shell integration

@@ -641,4 +641,180 @@ export function registerSymbolTools(server: McpServer): void {
             }
         }
     );
+
+    // Add rename_symbol_code tool
+    server.tool(
+        'rename_symbol_code',
+        `Renames a symbol (function, class, variable, etc.) and updates all references across the workspace.
+
+        WHEN TO USE: Refactoring code, improving naming conventions, fixing typos in symbol names.
+
+        This tool uses VS Code's built-in rename functionality to safely rename symbols and update all references.
+        The symbol must be found at the specified line in the file. If multiple symbols with the same name exist on the line,
+        the tool will return an error asking you to specify which one to rename.`,
+        {
+            path: z.string().describe('The path to the file containing the symbol'),
+            line: z.number().describe('The line number of the symbol (1-based)'),
+            symbol: z.string().describe('The symbol name to look for on the specified line'),
+            newName: z.string().describe('The new name for the symbol'),
+            matchIndex: z.number().optional().describe('Optional match index (1-based) to specify which symbol to rename when multiple matches are found on the same line')
+        },
+        async ({ path, line, symbol, newName, matchIndex }): Promise<CallToolResult> => {
+            logger.info(`[rename_symbol_code] Tool called with path="${path}", line=${line}, symbol="${symbol}", newName="${newName}", matchIndex=${matchIndex}`);
+
+            // Convert 1-based input to 0-based for VS Code API
+            const zeroBasedLine = line - 1;
+
+            try {
+                if (!vscode.workspace.workspaceFolders) {
+                    throw new Error('No workspace folder open');
+                }
+
+                const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+                const fullPath = require('path').resolve(workspaceRoot, path);
+                const uri = vscode.Uri.file(fullPath);
+
+                // Check if file exists
+                try {
+                    await vscode.workspace.fs.stat(uri);
+                } catch (error) {
+                    throw new Error(`File not found: ${path}`);
+                }
+
+                // Get the content of the specified line
+                const lineText = await getLineText(uri, zeroBasedLine);
+                if (!lineText) {
+                    throw new Error(`Line ${line} not found in file: ${path}`);
+                }
+
+                // Search for all occurrences of the symbol in the line
+                const symbolOccurrences: number[] = [];
+                let searchIndex = 0;
+
+                while (searchIndex < lineText.length) {
+                    const foundIndex = lineText.indexOf(symbol, searchIndex);
+                    if (foundIndex === -1) {
+                        break;
+                    }
+
+                    // Check if this is a whole word match (not part of a larger word)
+                    const isWordBoundaryBefore = foundIndex === 0 || !/\w/.test(lineText[foundIndex - 1]);
+                    const isWordBoundaryAfter = foundIndex + symbol.length >= lineText.length || !/\w/.test(lineText[foundIndex + symbol.length]);
+
+                    if (isWordBoundaryBefore && isWordBoundaryAfter) {
+                        symbolOccurrences.push(foundIndex);
+                    }
+
+                    searchIndex = foundIndex + symbol.length;
+                }
+
+                if (symbolOccurrences.length === 0) {
+                    return {
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Symbol "${symbol}" not found on line ${line} in file: ${path}`
+                            }
+                        ]
+                    };
+                }
+
+                let targetCharacter: number;
+
+                if (matchIndex !== undefined) {
+                    // User provided match index, use it to select the specific occurrence
+                    if (matchIndex < 1 || matchIndex > symbolOccurrences.length) {
+                        throw new Error(`Match index ${matchIndex} is out of range. Found ${symbolOccurrences.length} occurrence(s) of symbol "${symbol}" on line ${line}`);
+                    }
+
+                    targetCharacter = symbolOccurrences[matchIndex - 1]; // Convert to 0-based index
+                } else {
+                    // No match index provided
+                    if (symbolOccurrences.length > 1) {
+                        // Multiple symbols found on the same line
+                        let errorText = `Multiple occurrences of symbol "${symbol}" found on line ${line} in file: ${path}`;
+                        errorText += "\n\nOccurrences found (1-based index and character positions):";
+
+                        for (let i = 0; i < symbolOccurrences.length; i++) {
+                            errorText += `\n${i + 1}. Position ${symbolOccurrences[i] + 1}`;
+                        }
+
+                        errorText += "\n\nPlease specify which symbol to rename by providing the matchIndex parameter (e.g., matchIndex=1 for the first occurrence).";
+
+                        return {
+                            content: [
+                                {
+                                    type: 'text',
+                                    text: errorText
+                                }
+                            ]
+                        };
+                    }
+
+                    // Only one occurrence found, use it
+                    targetCharacter = symbolOccurrences[0];
+                }
+                const position = new vscode.Position(zeroBasedLine, targetCharacter);
+
+                // Execute the rename provider to get the rename locations
+                const renameLocations = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
+                    'vscode.executeDocumentRenameProvider',
+                    uri,
+                    position,
+                    newName
+                );
+
+                if (!renameLocations) {
+                    return {
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Cannot rename symbol "${symbol}" at ${path}:${line}. The symbol may not be renameable or the language server may not support renaming.`
+                            }
+                        ]
+                    };
+                }
+
+                // Apply the rename changes
+                const success = await vscode.workspace.applyEdit(renameLocations);
+
+                let resultText: string;
+
+                if (success) {
+                    // Count the number of changes
+                    let changeCount = 0;
+                    for (const [fileUri, edits] of renameLocations.entries()) {
+                        changeCount += edits.length;
+                    }
+
+                    resultText = `Successfully renamed symbol "${symbol}" to "${newName}". Applied ${changeCount} changes across ${renameLocations.size} file(s).`;
+
+                    // List the files that were modified
+                    if (renameLocations.size > 0) {
+                        resultText += "\n\nModified files:";
+                        for (const [fileUri, edits] of renameLocations.entries()) {
+                            const relativePath = uriToWorkspacePath(fileUri);
+                            resultText += `\n- ${relativePath} (${edits.length} change${edits.length !== 1 ? 's' : ''})`;
+                        }
+                    }
+                } else {
+                    resultText = `Failed to apply rename changes for symbol "${symbol}" at ${path}:${line}.`;
+                }
+
+                const callResult: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: resultText
+                        }
+                    ]
+                };
+                logger.info('[rename_symbol_code] Successfully completed');
+                return callResult;
+            } catch (error) {
+                logger.error(`[rename_symbol_code] Error in tool: ${error instanceof Error ? error.message : String(error)}`);
+                throw error;
+            }
+        }
+    );
 }
