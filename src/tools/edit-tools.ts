@@ -238,4 +238,74 @@ export function registerEditTools(server: McpServer): void {
             }
         }
     );
+
+    // Add format_document_code tool
+    server.tool(
+        'format_document_code',
+        `Formats the current document using VS Code's built-in formatting capabilities.
+
+        WHEN TO USE: Formatting code to follow project style guidelines, cleaning up indentation, or applying consistent formatting.
+
+        This tool executes the same formatting command as right-clicking and selecting "Format Document" in VS Code.
+        It uses the active formatter for the current file type (e.g., Prettier for JavaScript, Black for Python, etc.).
+
+        IMPORTANT: The document must be open and active in the editor for this tool to work.
+        Always check with read_file_code first to ensure the document is open and accessible.`,
+        {
+            path: z.string().describe('The path to the file to format (must be open in the editor)')
+        },
+        async ({ path }): Promise<CallToolResult> => {
+            console.log(`[format_document_code] Tool called with path=${path}`);
+
+            if (!vscode.workspace.workspaceFolders) {
+                throw new Error('No workspace folder is open');
+            }
+
+            const workspaceFolder = vscode.workspace.workspaceFolders[0];
+            const workspaceUri = workspaceFolder.uri;
+
+            // Create URI for the target file
+            const fileUri = vscode.Uri.joinPath(workspaceUri, path);
+            console.log(`[format_document_code] File URI: ${fileUri.fsPath}`);
+
+            try {
+                // Open the document if not already open
+                const document = await vscode.workspace.openTextDocument(fileUri);
+
+                // Get or show the document in an editor
+                let editor = vscode.window.activeTextEditor;
+                if (!editor || editor.document.uri.toString() !== fileUri.toString()) {
+                    editor = await vscode.window.showTextDocument(document);
+                }
+
+                // Execute the format document command
+                console.log('[format_document_code] Executing format document command');
+                const success = await vscode.commands.executeCommand('editor.action.formatDocument');
+
+                if (success) {
+                    console.log('[format_document_code] Format document command executed successfully');
+
+                    // Save the document to persist the formatting changes
+                    await document.save();
+                    console.log('[format_document_code] Document saved after formatting');
+
+                    const result: CallToolResult = {
+                        content: [
+                            {
+                                type: 'text',
+                                text: `Document ${path} formatted successfully`
+                            }
+                        ]
+                    };
+                    console.log('[format_document_code] Successfully completed');
+                    return result;
+                } else {
+                    throw new Error('Format document command failed');
+                }
+            } catch (error) {
+                console.error('[format_document_code] Error in tool:', error);
+                throw error;
+            }
+        }
+    );
 }

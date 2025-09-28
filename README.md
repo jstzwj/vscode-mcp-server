@@ -160,6 +160,16 @@ The extension creates an MCP server that:
     - `content`: The new content to replace the lines with
     - `originalCode`: The original code for validation
 
+- **format_document_code**: Formats the current document using VS Code's built-in formatting capabilities
+  - Parameters:
+    - `path`: The path to the file to format (must be open in the editor)
+
+  This tool is useful for:
+  - Formatting code to follow project style guidelines
+  - Cleaning up indentation and whitespace
+  - Applying consistent formatting across the codebase
+  - Using the active formatter for the current file type (e.g., Prettier for JavaScript, Black for Python, etc.)
+
 ### Diagnostics Tools
 - **get_diagnostics_code**: Checks for warnings and errors in your workspace
   - Parameters:
