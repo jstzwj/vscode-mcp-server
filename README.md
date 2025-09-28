@@ -266,6 +266,65 @@ The extension creates an MCP server that:
   - Performing any shell operations that require terminal access
   - Getting command output for analysis and further processing
 
+### Debug Tools
+- **start_debug_session_code**: Starts a new debug session
+  - Parameters:
+    - `launchConfig`: Debug configuration object
+
+- **stop_debug_session_code**: Stops the currently active debug session
+  - Parameters: None
+
+- **pause_debug_session_code**: Pauses the current debug session
+  - Parameters: None
+
+- **continue_debug_session_code**: Continues a paused debug session
+  - Parameters: None
+
+- **step_over_code**: Executes step over operation
+  - Parameters: None
+
+- **step_into_code**: Executes step into operation
+  - Parameters: None
+
+- **step_out_code**: Executes step out operation
+  - Parameters: None
+
+- **set_breakpoint_code**: Sets a breakpoint at a specific line in a file
+  - Parameters:
+    - `path`: File path (relative to workspace)
+    - `line`: Line number (1-based)
+
+- **remove_breakpoint_code**: Removes a breakpoint from a specific line in a file
+  - Parameters:
+    - `path`: File path (relative to workspace)
+    - `line`: Line number (1-based)
+
+- **get_variables_code**: Gets the values of variables in the current scope
+  - Parameters:
+    - `scope` (optional): Variable scope ('local', 'global', 'watch'). Default: 'local'
+
+- **add_watch_expression_code**: Adds a watch expression to monitor variable values
+  - Parameters:
+    - `expression`: The expression to watch
+
+- **remove_watch_expression_code**: Removes a watch expression
+  - Parameters:
+    - `expression`: The expression to remove
+
+- **get_call_stack_code**: Gets the current call stack
+  - Parameters: None
+
+- **get_debug_state_code**: Gets the current debug session state information
+  - Parameters: None
+
+  These debug tools are particularly useful for:
+  - Starting and stopping debug sessions
+  - Controlling debug execution flow (pause, continue, step)
+  - Managing breakpoints
+  - Monitoring variable values and expressions
+  - Viewing call stack information
+  - Automating debugging processes
+
 ## Caveats/TODO
 
 Currently, only one workspace is supported. The extension also only works locally, to avoid exposing your VS Code instance to any network you may be connected to.
@@ -275,7 +334,7 @@ Currently, only one workspace is supported. The extension also only works locall
 * `vscode-mcp-server.port`: The port number for the MCP server (default: 3000)
 * `vscode-mcp-server.host`: Host address for the MCP server (default: 127.0.0.1)
 * `vscode-mcp-server.defaultEnabled`: Whether the MCP server should be enabled by default on VS Code startup
-* `vscode-mcp-server.enabledTools`: Configure which tool categories are enabled (file, edit, shell, diagnostics, symbol)
+* `vscode-mcp-server.enabledTools`: Configure which tool categories are enabled (file, edit, shell, diagnostics, symbol, debug)
 
 **Selective Tool Configuration**: Useful for coding agents that already have certain capabilities. For example, with Claude Code you might disable file/edit tools and only enable symbol tools to add VS Code-specific symbol searching without tool duplication.
 

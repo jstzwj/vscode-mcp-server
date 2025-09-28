@@ -9,6 +9,7 @@ import { registerEditTools } from './tools/edit-tools';
 import { registerShellTools } from './tools/shell-tools';
 import { registerDiagnosticsTools } from './tools/diagnostics-tools';
 import { registerSymbolTools } from './tools/symbol-tools';
+import { registerDebugTools } from './tools/debug-tools';
 import { logger } from './utils/logger';
 
 export interface ToolConfiguration {
@@ -17,6 +18,7 @@ export interface ToolConfiguration {
     shell: boolean;
     diagnostics: boolean;
     symbol: boolean;
+    debug: boolean;
 }
 
 export class MCPServer {
@@ -43,7 +45,8 @@ export class MCPServer {
             edit: true,
             shell: true,
             diagnostics: true,
-            symbol: true
+            symbol: true,
+            debug: true
         };
         this.app = express();
         this.app.use(express.json());
@@ -114,6 +117,14 @@ export class MCPServer {
                 logger.info('MCP symbol tools registered successfully');
             } else {
                 logger.info('MCP symbol tools disabled by configuration');
+            }
+
+            // Register debug tools if enabled
+            if (this.toolConfig.debug) {
+                registerDebugTools(this.server);
+                logger.info('MCP debug tools registered successfully');
+            } else {
+                logger.info('MCP debug tools disabled by configuration');
             }
         } else {
             logger.warn('File listing callback not set during tools setup');
