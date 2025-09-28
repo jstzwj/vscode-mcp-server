@@ -11,18 +11,82 @@ export async function startDebugSession(launchConfig: any): Promise<void> {
     console.log(`[startDebugSession] Starting debug session with config:`, launchConfig);
 
     try {
-        // 使用VS Code的调试API启动调试会话
-        const success = await vscode.debug.startDebugging(undefined, launchConfig);
+        // Validate launch configuration
+        if (!launchConfig || typeof launchConfig !== 'object') {
+            throw new Error('Invalid launch configuration: must be a valid object');
+        }
+
+        // Process the launch configuration to handle workspace folder variables
+        const processedConfig = processLaunchConfig(launchConfig);
+
+        console.log(`[startDebugSession] Processed config:`, processedConfig);
+
+        // Use VS Code's debug API to start debugging session
+        // Pass the first workspace folder as the workspace
+        const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+        if (!workspaceFolder) {
+            throw new Error('No workspace folder is open. Please open a folder in VS Code to use debug tools.');
+        }
+
+        const success = await vscode.debug.startDebugging(workspaceFolder, processedConfig);
 
         if (success) {
             console.log('[startDebugSession] Debug session started successfully');
         } else {
-            throw new Error('Failed to start debug session');
+            throw new Error('Failed to start debug session. This may be due to missing launch.json configuration, invalid debug configuration, or the debugger not being installed.');
         }
     } catch (error) {
         console.error('[startDebugSession] Error:', error);
-        throw error;
+
+        // Provide more helpful error messages
+        if (error instanceof Error) {
+            if (error.message.includes("launch.json' does not exist")) {
+                throw new Error('Debug configuration requires a launch.json file in the workspace. Please create a launch.json file or use the create_simple_debug_config_code tool to generate a simple configuration.');
+            }
+            if (error.message.includes('Cannot find module')) {
+                throw new Error('Debugger not found. Please ensure the appropriate debugger extension is installed (e.g., Node.js Debugger, Python Debugger, etc.).');
+            }
+            throw error;
+        }
+        throw new Error(`Failed to start debug session: ${error}`);
     }
+}
+
+/**
+ * Processes launch configuration to handle workspace folder variables and other special cases
+ * @param config Raw launch configuration
+ * @returns Processed launch configuration
+ */
+function processLaunchConfig(config: any): any {
+    if (!config || typeof config !== 'object') {
+        return config;
+    }
+
+    const processedConfig = { ...config };
+
+    // Handle workspace folder variable replacement
+    if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
+        const workspaceFolder = vscode.workspace.workspaceFolders[0];
+        const workspacePath = workspaceFolder.uri.fsPath;
+
+        // Stringify and replace variables, then parse back
+        try {
+            let configString = JSON.stringify(processedConfig);
+            configString = configString.replace(/\$\{workspaceFolder\}/g, workspacePath);
+
+            // Also handle other common VS Code variables
+            configString = configString.replace(/\$\{workspaceRoot\}/g, workspacePath);
+            configString = configString.replace(/\$\{workspace\}/g, workspacePath);
+
+            return JSON.parse(configString);
+        } catch (parseError) {
+            console.warn('[processLaunchConfig] Failed to parse processed config, using original:', parseError);
+            return processedConfig;
+        }
+    }
+
+    return processedConfig;
 }
 
 /**
@@ -334,7 +398,20 @@ export function registerDebugTools(server: McpServer): void {
                 return result;
             } catch (error) {
                 console.error('[start_debug_session_code] Error in tool:', error);
-                throw error;
+
+                // Provide user-friendly error messages
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to start debug session: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
             }
         }
     );
@@ -368,7 +445,19 @@ export function registerDebugTools(server: McpServer): void {
                 return result;
             } catch (error) {
                 console.error('[stop_debug_session_code] Error in tool:', error);
-                throw error;
+
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to stop debug session: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
             }
         }
     );
@@ -566,6 +655,14 @@ export function registerDebugTools(server: McpServer): void {
             console.log(`[set_breakpoint_code] Tool called with path=${path}, line=${line}`);
 
             try {
+                // Validate inputs
+                if (!path || typeof path !== 'string') {
+                    throw new Error('Path parameter is required and must be a string');
+                }
+                if (!line || typeof line !== 'number' || line < 1) {
+                    throw new Error('Line parameter is required and must be a positive number');
+                }
+
                 await setBreakpoint(path, line);
 
                 const result: CallToolResult = {
@@ -580,7 +677,19 @@ export function registerDebugTools(server: McpServer): void {
                 return result;
             } catch (error) {
                 console.error('[set_breakpoint_code] Error in tool:', error);
-                throw error;
+
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to set breakpoint: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
             }
         }
     );
@@ -607,6 +716,14 @@ export function registerDebugTools(server: McpServer): void {
             console.log(`[remove_breakpoint_code] Tool called with path=${path}, line=${line}`);
 
             try {
+                // Validate inputs
+                if (!path || typeof path !== 'string') {
+                    throw new Error('Path parameter is required and must be a string');
+                }
+                if (!line || typeof line !== 'number' || line < 1) {
+                    throw new Error('Line parameter is required and must be a positive number');
+                }
+
                 await removeBreakpoint(path, line);
 
                 const result: CallToolResult = {
@@ -621,7 +738,19 @@ export function registerDebugTools(server: McpServer): void {
                 return result;
             } catch (error) {
                 console.error('[remove_breakpoint_code] Error in tool:', error);
-                throw error;
+
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to remove breakpoint: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
             }
         }
     );
@@ -660,7 +789,88 @@ export function registerDebugTools(server: McpServer): void {
                 return result;
             } catch (error) {
                 console.error('[get_debug_state_code] Error in tool:', error);
-                throw error;
+
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to get debug state: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
+            }
+        }
+    );
+
+    // Add create_simple_debug_config_code tool
+    server.tool(
+        'create_simple_debug_config_code',
+        `Creates a simple debug configuration that doesn't require launch.json.
+
+        Use cases: Quick debugging setup when no launch.json exists, testing debug functionality.
+
+        Parameter details:
+        - program: The program file to debug (e.g., "app.js", "src/main.ts")
+        - type: Debugger type (e.g., "node", "python", "java"). Default: "node"
+
+        Important notes:
+        - Creates a minimal debug configuration that should work without launch.json
+        - For complex projects, consider creating a proper launch.json file
+        - This is a fallback option when standard debug configurations fail`,
+        {
+            program: z.string().describe('The program file to debug'),
+            type: z.string().optional().default('node').describe('Debugger type (e.g., "node", "python", "java")')
+        },
+        async ({ program, type = 'node' }): Promise<CallToolResult> => {
+            console.log(`[create_simple_debug_config_code] Tool called with program=${program}, type=${type}`);
+
+            try {
+                // Validate inputs
+                if (!program || typeof program !== 'string') {
+                    throw new Error('Program parameter is required and must be a string');
+                }
+
+                // Create a simple debug configuration
+                const simpleConfig = {
+                    name: `Debug ${program}`,
+                    type: type,
+                    request: 'launch',
+                    program: program,
+                    console: 'integratedTerminal',
+                    internalConsoleOptions: 'neverOpen'
+                };
+
+                console.log('[create_simple_debug_config_code] Simple debug config created');
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Here's a simple debug configuration you can use with start_debug_session_code:\n\n${JSON.stringify(simpleConfig, null, 2)}`
+                        }
+                    ]
+                };
+                console.log('[create_simple_debug_config_code] Successfully completed');
+                return result;
+            } catch (error) {
+                console.error('[create_simple_debug_config_code] Error in tool:', error);
+
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                const result: CallToolResult = {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Failed to create debug configuration: ${errorMessage}`
+                        }
+                    ],
+                    isError: true
+                };
+                return result;
             }
         }
     );

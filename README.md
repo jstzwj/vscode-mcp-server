@@ -317,6 +317,11 @@ The extension creates an MCP server that:
 - **get_debug_state_code**: Gets the current debug session state information
   - Parameters: None
 
+- **create_simple_debug_config_code**: Creates a simple debug configuration that doesn't require launch.json
+  - Parameters:
+    - `program`: The program file to debug (e.g., "app.js", "src/main.ts")
+    - `type` (optional): Debugger type (e.g., "node", "python", "java"). Default: "node"
+
   These debug tools are particularly useful for:
   - Starting and stopping debug sessions
   - Controlling debug execution flow (pause, continue, step)
@@ -324,6 +329,22 @@ The extension creates an MCP server that:
   - Monitoring variable values and expressions
   - Viewing call stack information
   - Automating debugging processes
+  - Creating simple debug configurations without launch.json
+
+### Debug Tool Usage Tips
+
+**For quick debugging setup:**
+1. Use `create_simple_debug_config_code` to generate a basic configuration
+2. Use the generated configuration with `start_debug_session_code`
+
+**For projects with launch.json:**
+1. Use `start_debug_session_code` with your existing launch configuration
+2. The tool automatically handles workspace folder variable replacement
+
+**Common debug configurations:**
+- Node.js: `{"name": "Debug", "type": "node", "request": "launch", "program": "app.js"}`
+- Python: `{"name": "Debug", "type": "python", "request": "launch", "program": "main.py"}`
+- Use `${workspaceFolder}` in paths to reference the workspace root
 
 ## Caveats/TODO
 
